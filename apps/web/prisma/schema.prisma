@@ -1,0 +1,34 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+}
+
+model InventoryMovements {
+  MovementID   Int       @id(map: "PK__Inventor__D1822466424FF5A2") @default(autoincrement())
+  ProductID    Int
+  MovementType String?   @db.VarChar(10)
+  Quantity     Int
+  MovementDate DateTime? @default(now(), map: "DF__Inventory__Movem__3F466844") @db.DateTime
+  Products     Products  @relation(fields: [ProductID], references: [ProductID], onUpdate: NoAction, map: "FK_Inventory_Product")
+}
+
+model ProductionLogs {
+  LogID          Int       @id(map: "PK__Producti__5E5499A877F675AB") @default(autoincrement())
+  ProductID      Int
+  Quantity       Int
+  ProductionDate DateTime? @default(now(), map: "DF__Productio__Produ__3A81B327") @db.DateTime
+  OperatorName   String?   @db.VarChar(50)
+  Products       Products  @relation(fields: [ProductID], references: [ProductID], onUpdate: NoAction, map: "FK_Production_Product")
+}
+
+model Products {
+  ProductID          Int                  @id(map: "PK__Products__B40CC6EDE819CD1A") @default(autoincrement())
+  ProductName        String               @db.VarChar(100)
+  MinStock           Int?                 @default(0, map: "DF__Products__MinSto__37A5467C")
+  Unit               String?              @db.VarChar(20)
+  InventoryMovements InventoryMovements[]
+  ProductionLogs     ProductionLogs[]
+}
