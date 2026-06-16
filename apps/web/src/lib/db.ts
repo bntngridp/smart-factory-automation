@@ -1,17 +1,21 @@
 import { PrismaClient } from '@prisma/client'
+import { PrismaMssql } from '@prisma/adapter-mssql'
 
 const prismaClientSingleton = () => {
-    return new PrismaClient({
-        datasourceUrl: process.env.DATABASE_URL,
-    })
+  const connectionString = process.env.DATABASE_URL
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is not set in environment variables')
+  }
+  const adapter = new PrismaMssql(connectionString)
+  return new PrismaClient({ adapter })
 }
 
-declare global {
-    var prisma: ReturnType<typeof prismaClientSingleton> | undefined;
+const globalForPrisma = globalThis as unknown as {
+  prisma: ReturnType<typeof prismaClientSingleton> | undefined
 }
 
-const prisma = globalThis.prisma ?? prismaClientSingleton()
+export const prisma = globalForPrisma.prisma ?? prismaClientSingleton()
 
-export default prisma
-
-if (process.env.NODE_ENV !== 'production') globalThis.prisma = prisma
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma
+}
