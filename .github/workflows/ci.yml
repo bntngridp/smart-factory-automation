@@ -50,7 +50,7 @@ jobs:
 
       - name: Setup Prisma Schema & Seeder
         run: |
-          npx prisma db push --skip-generate
+          npx prisma db push
           npx prisma db seed
         working-directory: apps/web
         env:
