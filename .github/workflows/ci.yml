@@ -10,17 +10,21 @@ jobs:
   lint-typecheck-test:
     runs-on: ubuntu-latest
 
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      # Menggunakan Node.js 24 sesuai regulasi GitHub Actions Juni 2026
+      - name: Setup Node.js (v24)
         uses: actions/setup-node@v4
         with:
-          node-size: '20' # Sesuaikan dengan versi Node kamu (20 atau 22)
-          cache: 'npm'
+          node-version: '24'
+          # Opsi cache dihapus agar GitHub tidak memaksa mencari lockfile di folder root
 
-      # Langkah Pintar: Jalankan SQL Server langsung lewat Docker CLI (Lebih Stabil)
+      # Menyalakan Azure SQL Edge via Docker CLI
       - name: Start SQL Server Local Container
         run: |
           docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=YourStrong@Password123" \
@@ -28,12 +32,13 @@ jobs:
           --name sql_server \
           -d mcr.microsoft.com/azure-sql-edge:latest
 
-          # Tunggu sampai SQL Server benar-benar siap menerima koneksi
           echo "Waiting for SQL Server to boot up..."
           sleep 15
 
+      # Memaksa install dependency di folder web tempat Next.js & package.json berada
       - name: Install Dependencies
         run: npm install
+        working-directory: apps/web
 
       - name: Run Linter
         run: npm run lint
