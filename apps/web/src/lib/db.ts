@@ -1,4 +1,4 @@
-import { PrismaClient } from '../../node_modules/.prisma/client/index.js'
+import { PrismaClient } from '@prisma/client'
 import { PrismaMssql } from '@prisma/adapter-mssql'
 
 const prismaClientSingleton = () => {

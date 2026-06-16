@@ -16,16 +16,8 @@ export type UpdateProductInput = {
 
 export async function getProducts(search?: string) {
   return prisma.products.findMany({
-    where: search
-      ? {
-          ProductName: {
-            contains: search,
-          },
-        }
-      : undefined,
-    orderBy: {
-      ProductID: 'desc',
-    },
+    where: search ? { ProductName: { contains: search } } : undefined,
+    orderBy: { ProductID: 'desc' },
   })
 }
 

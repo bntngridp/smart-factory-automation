@@ -7,20 +7,23 @@ export type CreateMovementOutInput = {
   Quantity: number
 }
 
+type Movement = { MovementType: string | null; Quantity: number }
+
 export async function getCurrentStock(productId: number): Promise<number> {
   const movements = await prisma.inventoryMovements.findMany({
     where: { ProductID: productId },
     select: { MovementType: true, Quantity: true },
   })
 
-  type Movement = { MovementType: string | null; Quantity: number }
-
-  const totalIn = (movements as Movement[])
-    .filter((m) => m.MovementType === 'IN')
-    .reduce((sum: number, m) => sum + m.Quantity, 0)
-  const totalOut = (movements as Movement[])
-    .filter((m) => m.MovementType === 'OUT')
-    .reduce((sum: number, m) => sum + m.Quantity, 0)
+  const m = movements as Movement[]
+  const totalIn = m.reduce(
+    (sum, x) => (x.MovementType === 'IN' ? sum + x.Quantity : sum),
+    0,
+  )
+  const totalOut = m.reduce(
+    (sum, x) => (x.MovementType === 'OUT' ? sum + x.Quantity : sum),
+    0,
+  )
 
   return totalIn - totalOut
 }

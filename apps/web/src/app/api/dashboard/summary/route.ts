@@ -1,6 +1,16 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 
+type Movement = { MovementType: string | null; Quantity: number }
+
+type ProductWithMovements = {
+  ProductID: number
+  ProductName: string
+  Unit: string | null
+  MinStock: number | null
+  InventoryMovements: Movement[]
+}
+
 export async function GET() {
   try {
     const startOfToday = new Date()
@@ -15,25 +25,23 @@ export async function GET() {
       prisma.products.findMany({
         where: { MinStock: { gt: 0 } },
         include: {
-          InventoryMovements: {
-            select: { MovementType: true, Quantity: true },
-          },
+          InventoryMovements: { select: { MovementType: true, Quantity: true } },
         },
       }),
     ])
 
-    type Movement = { MovementType: string | null; Quantity: number }
+    const list = products as ProductWithMovements[]
 
-    const lowStockAlerts = products
+    const lowStockAlerts = list
       .map((product) => {
-        const movements = product.InventoryMovements as Movement[]
-        const totalIn = movements
-          .filter((m) => m.MovementType === 'IN')
-          .reduce((sum: number, m) => sum + m.Quantity, 0)
-        const totalOut = movements
-          .filter((m) => m.MovementType === 'OUT')
-          .reduce((sum: number, m) => sum + m.Quantity, 0)
-
+        const totalIn = product.InventoryMovements.reduce(
+          (sum, m) => (m.MovementType === 'IN' ? sum + m.Quantity : sum),
+          0,
+        )
+        const totalOut = product.InventoryMovements.reduce(
+          (sum, m) => (m.MovementType === 'OUT' ? sum + m.Quantity : sum),
+          0,
+        )
         const currentStock = totalIn - totalOut
         const minStock = product.MinStock ?? 0
 
@@ -53,7 +61,7 @@ export async function GET() {
         total_production_today: todayAgg._sum.Quantity ?? 0,
         low_stock_alerts: lowStockAlerts,
       },
-      { status: 200 }
+      { status: 200 },
     )
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Terjadi kesalahan'

@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import { PrismaClient } from '../node_modules/.prisma/client/index.js'
+import { PrismaClient } from '@prisma/client'
 import { PrismaMssql } from '@prisma/adapter-mssql'
 
 const connectionString = process.env.DATABASE_URL
@@ -9,6 +9,8 @@ if (!connectionString) {
 const adapter = new PrismaMssql(connectionString)
 const prisma = new PrismaClient({ adapter })
 
+type LogRow = { ProductID: number; Quantity: number }
+
 async function main() {
   console.log('🌱 Memulai seeding database...')
 
@@ -17,36 +19,12 @@ async function main() {
   await prisma.products.deleteMany()
 
   const productsData = [
-    {
-      ProductName: 'Baut Industri M8',
-      Unit: 'pcs',
-      MinStock: 500,
-    },
-    {
-      ProductName: 'Sensor Suhu OMRON E5CC',
-      Unit: 'pcs',
-      MinStock: 25,
-    },
-    {
-      ProductName: 'PLC Mitsubishi FX5U',
-      Unit: 'unit',
-      MinStock: 10,
-    },
-    {
-      ProductName: 'Motor Servo 400W',
-      Unit: 'unit',
-      MinStock: 15,
-    },
-    {
-      ProductName: 'Relay Industri 24V',
-      Unit: 'pcs',
-      MinStock: 100,
-    },
-    {
-      ProductName: 'Bearing SKF 6203',
-      Unit: 'pcs',
-      MinStock: 200,
-    },
+    { ProductName: 'Baut Industri M8', Unit: 'pcs', MinStock: 500 },
+    { ProductName: 'Sensor Suhu OMRON E5CC', Unit: 'pcs', MinStock: 25 },
+    { ProductName: 'PLC Mitsubishi FX5U', Unit: 'unit', MinStock: 10 },
+    { ProductName: 'Motor Servo 400W', Unit: 'unit', MinStock: 15 },
+    { ProductName: 'Relay Industri 24V', Unit: 'pcs', MinStock: 100 },
+    { ProductName: 'Bearing SKF 6203', Unit: 'pcs', MinStock: 200 },
   ]
 
   const products = await prisma.$transaction(
@@ -55,41 +33,17 @@ async function main() {
   console.log(`✅ ${products.length} produk berhasil dibuat`)
 
   const productionLogsData = [
-    {
-      ProductID: products[0].ProductID,
-      Quantity: 500,
-      OperatorName: 'Budi Santoso',
-    },
-    {
-      ProductID: products[0].ProductID,
-      Quantity: 350,
-      OperatorName: 'Siti Aminah',
-    },
-    {
-      ProductID: products[1].ProductID,
-      Quantity: 40,
-      OperatorName: 'Andi Wijaya',
-    },
-    {
-      ProductID: products[2].ProductID,
-      Quantity: 12,
-      OperatorName: 'Dewi Lestari',
-    },
-    {
-      ProductID: products[3].ProductID,
-      Quantity: 25,
-      OperatorName: 'Rudi Hartono',
-    },
-    {
-      ProductID: products[4].ProductID,
-      Quantity: 200,
-      OperatorName: 'Maya Sari',
-    },
+    { ProductID: products[0].ProductID, Quantity: 500, OperatorName: 'Budi Santoso' },
+    { ProductID: products[0].ProductID, Quantity: 350, OperatorName: 'Siti Aminah' },
+    { ProductID: products[1].ProductID, Quantity: 40, OperatorName: 'Andi Wijaya' },
+    { ProductID: products[2].ProductID, Quantity: 12, OperatorName: 'Dewi Lestari' },
+    { ProductID: products[3].ProductID, Quantity: 25, OperatorName: 'Rudi Hartono' },
+    { ProductID: products[4].ProductID, Quantity: 200, OperatorName: 'Maya Sari' },
   ]
 
-  const logs = await prisma.$transaction(
+  const logs = (await prisma.$transaction(
     productionLogsData.map((data) => prisma.productionLogs.create({ data })),
-  )
+  )) as LogRow[]
   console.log(`✅ ${logs.length} production log berhasil dibuat`)
 
   const inventoryMovementsData = logs.map((log) => ({

@@ -3,14 +3,10 @@
 import { useState, useTransition } from 'react'
 import { createProductionLogAction } from '@/app/actions/production'
 
-type Product = {
-  ProductID: number
-  ProductName: string
-  Unit: string | null
-}
+type ProductOption = { ProductID: number; ProductName: string; Unit: string | null }
 
 type Props = {
-  products: Pick<Product, 'ProductID' | 'ProductName' | 'Unit'>[]
+  products: Pick<ProductOption, 'ProductID' | 'ProductName' | 'Unit'>[]
 }
 
 export function ProductionForm({ products }: Props) {

@@ -12,14 +12,7 @@ export async function getProductionLogs(limit = 20) {
   return prisma.productionLogs.findMany({
     take: limit,
     orderBy: { ProductionDate: 'desc' },
-    include: {
-      Products: {
-        select: {
-          ProductName: true,
-          Unit: true,
-        },
-      },
-    },
+    include: { Products: { select: { ProductName: true, Unit: true } } },
   })
 }
 

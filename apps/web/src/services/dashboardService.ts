@@ -15,6 +15,15 @@ export type DashboardStats = {
   }[]
 }
 
+type MovementWithProduct = {
+  MovementID: number
+  ProductID: number
+  MovementType: string | null
+  Quantity: number
+  MovementDate: Date | null
+  Products: { ProductName: string; Unit: string | null }
+}
+
 export async function getDashboardStats(): Promise<DashboardStats> {
   const startOfToday = new Date()
   startOfToday.setHours(0, 0, 0, 0)
@@ -28,18 +37,16 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     prisma.inventoryMovements.findMany({
       take: 5,
       orderBy: { MovementDate: 'desc' },
-      include: {
-        Products: {
-          select: { ProductName: true, Unit: true },
-        },
-      },
+      include: { Products: { select: { ProductName: true, Unit: true } } },
     }),
   ])
+
+  const movements = recentMovements as MovementWithProduct[]
 
   return {
     totalProducts,
     todayProduction: todayAgg._sum.Quantity ?? 0,
-    recentMovements: recentMovements.map((m) => ({
+    recentMovements: movements.map((m) => ({
       MovementID: m.MovementID,
       ProductID: m.ProductID,
       MovementType: m.MovementType,
