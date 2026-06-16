@@ -1,0 +1,632 @@
+{
+  "info": {
+    "name": "Smart Factory Automation API",
+    "_postman_id": "smart-factory-collection-001",
+    "description": "RESTful API untuk Smart Factory Automation. Mencakup:\n- Master Data Products (CRUD)\n- Production Logs (dengan auto inventory mutation IN)\n- Inventory Movements (history + create OUT)\n- Dashboard Summary (agregasi)\n\nSemua endpoint sudah termasuk contoh body, header, dan response. Cukup klik 'Send' untuk test.\n\nBase URL: {{base_url}} (default: http://localhost:3000)\nContent-Type: application/json",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Products",
+      "item": [
+        {
+          "name": "GET /api/products - List semua produk",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/products",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products"]
+            },
+            "description": "Mengambil semua daftar produk. Diurutkan ProductID descending. Response 200 dengan array of products."
+          },
+          "response": [
+            {
+              "name": "Success 200",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/products",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "products"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "[\n  {\n    \"ProductID\": 1002,\n    \"ProductName\": \"Baut Industri M8\",\n    \"MinStock\": 500,\n    \"Unit\": \"pcs\"\n  },\n  {\n    \"ProductID\": 1003,\n    \"ProductName\": \"Sensor Suhu OMRON E5CC\",\n    \"MinStock\": 25,\n    \"Unit\": \"pcs\"\n  },\n  {\n    \"ProductID\": 1004,\n    \"ProductName\": \"PLC Mitsubishi FX5U\",\n    \"MinStock\": 10,\n    \"Unit\": \"unit\"\n  }\n]"
+            }
+          ]
+        },
+        {
+          "name": "POST /api/products - Tambah produk baru (valid)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ProductName\": \"Bearing SKF 6203-2RS\",\n  \"Unit\": \"pcs\",\n  \"MinStock\": 200\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/products",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products"]
+            },
+            "description": "Tambah produk baru. Validasi: ProductName wajib (max 100 char), MinStock >= 0 (integer). Response 201 dengan object produk yang baru dibuat."
+          },
+          "response": [
+            {
+              "name": "Success 201",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ProductName\": \"Bearing SKF 6203-2RS\",\n  \"Unit\": \"pcs\",\n  \"MinStock\": 200\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/products",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "products"]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"ProductID\": 1011,\n  \"ProductName\": \"Bearing SKF 6203-2RS\",\n  \"MinStock\": 200,\n  \"Unit\": \"pcs\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /api/products - Validasi gagal (ProductName kosong)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ProductName\": \"\",\n  \"Unit\": \"pcs\",\n  \"MinStock\": 100\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/products",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products"]
+            },
+            "description": "Test validasi Zod: ProductName kosong. Response 400 dengan details array."
+          },
+          "response": [
+            {
+              "name": "Validation Error 400",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ProductName\": \"\",\n  \"Unit\": \"pcs\",\n  \"MinStock\": 100\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/products",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "products"]
+                }
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"error\": \"Validasi gagal\",\n  \"details\": [\n    {\n      \"field\": \"ProductName\",\n      \"message\": \"Nama produk tidak boleh kosong\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /api/products - Validasi gagal (MinStock negatif)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ProductName\": \"Test Product\",\n  \"MinStock\": -50\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/products",
+              "host": ["{{base_url}}"],
+              "path": ["api", "products"]
+            },
+            "description": "Test validasi Zod: MinStock negatif. Response 400."
+          },
+          "response": [
+            {
+              "name": "Validation Error 400",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ProductName\": \"Test Product\",\n  \"MinStock\": -50\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/products",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "products"]
+                }
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"error\": \"Validasi gagal\",\n  \"details\": [\n    {\n      \"field\": \"MinStock\",\n      \"message\": \"MinStock tidak boleh negatif\"\n    }\n  ]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Production Logs",
+      "item": [
+        {
+          "name": "POST /api/production-logs - Catat produksi (valid)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": 1002,\n  \"quantity\": 500,\n  \"operator_name\": \"Budi Santoso\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/production-logs",
+              "host": ["{{base_url}}"],
+              "path": ["api", "production-logs"]
+            },
+            "description": "Catat hasil produksi. Akan OTOMATIS membuat InventoryMovement tipe IN dengan quantity sama (Prisma $transaction). Ganti product_id dengan ID produk valid dari GET /api/products."
+          },
+          "response": [
+            {
+              "name": "Success 201 + auto IN movement",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"product_id\": 1002,\n  \"quantity\": 500,\n  \"operator_name\": \"Budi Santoso\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/production-logs",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "production-logs"]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"LogID\": 1010,\n  \"ProductID\": 1002,\n  \"Quantity\": 500,\n  \"ProductionDate\": \"2026-06-16T08:37:32.997Z\",\n  \"OperatorName\": \"Budi Santoso\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /api/production-logs - Product tidak ditemukan (rollback 404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": 99999,\n  \"quantity\": 100,\n  \"operator_name\": \"Test Rollback\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/production-logs",
+              "host": ["{{base_url}}"],
+              "path": ["api", "production-logs"]
+            },
+            "description": "Test rollback: product_id 99999 tidak ada. Transaksi dibatalkan, TIDAK ada data masuk ke DB. Response 404."
+          },
+          "response": [
+            {
+              "name": "Not Found 404 - Rollback",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"product_id\": 99999,\n  \"quantity\": 100,\n  \"operator_name\": \"Test Rollback\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/production-logs",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "production-logs"]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"error\": \"Produk dengan ID 99999 tidak ditemukan\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /api/production-logs - Validasi gagal (quantity 0)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": 1002,\n  \"quantity\": 0,\n  \"operator_name\": \"Test\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/production-logs",
+              "host": ["{{base_url}}"],
+              "path": ["api", "production-logs"]
+            },
+            "description": "Test validasi Zod: quantity harus > 0. Response 400."
+          },
+          "response": [
+            {
+              "name": "Validation Error 400",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"product_id\": 1002,\n  \"quantity\": 0,\n  \"operator_name\": \"Test\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/production-logs",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "production-logs"]
+                }
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"error\": \"Validasi gagal\",\n  \"details\": [\n    {\n      \"field\": \"quantity\",\n      \"message\": \"quantity harus lebih dari 0\"\n    }\n  ]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Inventory Movements",
+      "item": [
+        {
+          "name": "GET /api/inventory/movements - Semua history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/inventory/movements",
+              "host": ["{{base_url}}"],
+              "path": ["api", "inventory", "movements"]
+            },
+            "description": "Ambil semua pergerakan inventaris. Include data produk (ProductName, Unit). Sorted MovementDate desc."
+          },
+          "response": [
+            {
+              "name": "Success 200",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/inventory/movements",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "inventory", "movements"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "[\n  {\n    \"MovementID\": 1010,\n    \"ProductID\": 1002,\n    \"MovementType\": \"OUT\",\n    \"Quantity\": 50,\n    \"MovementDate\": \"2026-06-16T08:37:55.900Z\",\n    \"Products\": {\n      \"ProductName\": \"Baut Industri M8\",\n      \"Unit\": \"pcs\"\n    }\n  }\n]"
+            }
+          ]
+        },
+        {
+          "name": "GET /api/inventory/movements?type=IN - Filter masuk",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/inventory/movements?type=IN",
+              "host": ["{{base_url}}"],
+              "path": ["api", "inventory", "movements"],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "IN"
+                }
+              ]
+            },
+            "description": "Filter hanya movement IN."
+          }
+        },
+        {
+          "name": "GET /api/inventory/movements?type=OUT - Filter keluar",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/inventory/movements?type=OUT",
+              "host": ["{{base_url}}"],
+              "path": ["api", "inventory", "movements"],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "OUT"
+                }
+              ]
+            },
+            "description": "Filter hanya movement OUT."
+          }
+        },
+        {
+          "name": "GET /api/inventory/movements?type=TRANSFER - Invalid (400)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/inventory/movements?type=TRANSFER",
+              "host": ["{{base_url}}"],
+              "path": ["api", "inventory", "movements"],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "TRANSFER"
+                }
+              ]
+            },
+            "description": "Type invalid. Response 400."
+          },
+          "response": [
+            {
+              "name": "Bad Request 400",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/inventory/movements?type=TRANSFER",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "inventory", "movements"]
+                }
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"error\": \"Query parameter type harus \\\"IN\\\" atau \\\"OUT\\\"\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /api/inventory/movements - Mutasi OUT (valid)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": 1002,\n  \"quantity\": 50,\n  \"movement_type\": \"OUT\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/inventory/movements",
+              "host": ["{{base_url}}"],
+              "path": ["api", "inventory", "movements"]
+            },
+            "description": "Catat mutasi barang keluar (OUT). Stok produk akan berkurang. Validasi: stok saat ini >= quantity. Ganti product_id dengan ID valid."
+          },
+          "response": [
+            {
+              "name": "Success 201",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"product_id\": 1002,\n  \"quantity\": 50,\n  \"movement_type\": \"OUT\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/inventory/movements",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "inventory", "movements"]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"MovementID\": 1011,\n  \"ProductID\": 1002,\n  \"MovementType\": \"OUT\",\n  \"Quantity\": 50,\n  \"MovementDate\": \"2026-06-16T08:40:00.000Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /api/inventory/movements - Stok tidak cukup (422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": 1002,\n  \"quantity\": 999999,\n  \"movement_type\": \"OUT\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/inventory/movements",
+              "host": ["{{base_url}}"],
+              "path": ["api", "inventory", "movements"]
+            },
+            "description": "Test business rule: stok tidak boleh negatif. Response 422 Unprocessable Entity."
+          },
+          "response": [
+            {
+              "name": "Unprocessable Entity 422",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"product_id\": 1002,\n  \"quantity\": 999999,\n  \"movement_type\": \"OUT\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/inventory/movements",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "inventory", "movements"]
+                }
+              },
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"error\": \"Stok tidak mencukupi. Stok saat ini: 1050, diminta: 999999\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /api/inventory/movements - movement_type IN ditolak (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_id\": 1002,\n  \"quantity\": 100,\n  \"movement_type\": \"IN\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/inventory/movements",
+              "host": ["{{base_url}}"],
+              "path": ["api", "inventory", "movements"]
+            },
+            "description": "Movement IN hanya otomatis dari POST /api/production-logs. Tidak bisa manual via endpoint ini. Response 400."
+          },
+          "response": [
+            {
+              "name": "Bad Request 400",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"product_id\": 1002,\n  \"quantity\": 100,\n  \"movement_type\": \"IN\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/inventory/movements",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "inventory", "movements"]
+                }
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"error\": \"Hanya movement_type \\\"OUT\\\" yang didukung. Movement IN otomatis dari production log.\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Dashboard",
+      "item": [
+        {
+          "name": "GET /api/dashboard/summary - Ringkasan pabrik",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/dashboard/summary",
+              "host": ["{{base_url}}"],
+              "path": ["api", "dashboard", "summary"]
+            },
+            "description": "Ambil ringkasan: total_products, total_production_today, low_stock_alerts (array produk yang stok < MinStock)."
+          },
+          "response": [
+            {
+              "name": "Success 200",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/dashboard/summary",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "dashboard", "summary"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "cookie": [],
+              "body": "{\n  \"total_products\": 9,\n  \"total_production_today\": 1477,\n  \"low_stock_alerts\": [\n    {\n      \"ProductID\": 1007,\n      \"ProductName\": \"Bearing SKF 6203\",\n      \"Unit\": \"pcs\",\n      \"MinStock\": 200,\n      \"CurrentStock\": 0\n    },\n    {\n      \"ProductID\": 1008,\n      \"ProductName\": \"Test Produk API\",\n      \"Unit\": \"pcs\",\n      \"MinStock\": 50,\n      \"CurrentStock\": 0\n    }\n  ]\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,563 @@
+openapi: 3.0.3
+info:
+  title: Smart Factory Automation API
+  description: |
+    RESTful API untuk Smart Factory Automation.
+
+    ## Fitur
+    - **Master Data Products** — CRUD produk manufaktur
+    - **Production Logs** — Catat produksi harian + auto inventory mutation IN (atomic transaction)
+    - **Inventory Movements** — History + mutasi OUT dengan validasi stok
+    - **Dashboard Summary** — Agregasi data untuk monitoring (total products, produksi hari ini, low stock alerts)
+
+    ## Tech Stack
+    - Next.js 16 (App Router) + Route Handlers
+    - Prisma 7 + Microsoft SQL Server (Azure SQL Edge di Docker)
+    - Zod untuk input validation
+    - TypeScript strict mode
+
+    ## Authentication
+    Saat ini tidak ada authentication — endpoint public untuk internal network.
+
+    ## Data Dummy
+    Contoh payload sudah tersedia di tiap endpoint. Product ID di database real dimulai dari **1002** (auto-increment SQL Server). Jika ingin test, jalankan seeder dulu: `npx prisma db seed`.
+  version: 1.0.0
+  contact:
+    name: Smart Factory Dev Team
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+
+tags:
+  - name: Products
+    description: Master data produk manufaktur
+  - name: Production Logs
+    description: Catat produksi harian (dengan auto inventory IN)
+  - name: Inventory Movements
+    description: History dan mutasi stok (OUT)
+  - name: Dashboard
+    description: Agregasi data untuk monitoring
+
+paths:
+  /api/products:
+    get:
+      tags: [Products]
+      summary: Ambil semua produk
+      description: |
+        Mengembalikan list produk, diurutkan ProductID descending.
+        Cocok untuk dropdown atau tabel master produk.
+      responses:
+        '200':
+          description: OK — array of products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+              example:
+                - ProductID: 1002
+                  ProductName: Baut Industri M8
+                  MinStock: 500
+                  Unit: pcs
+                - ProductID: 1003
+                  ProductName: Sensor Suhu OMRON E5CC
+                  MinStock: 25
+                  Unit: pcs
+                - ProductID: 1004
+                  ProductName: PLC Mitsubishi FX5U
+                  MinStock: 10
+                  Unit: unit
+    post:
+      tags: [Products]
+      summary: Tambah produk baru
+      description: |
+        Validasi (Zod):
+        - `ProductName` wajib, string, 1-100 karakter
+        - `Unit` opsional, string max 20 karakter
+        - `MinStock` opsional, integer >= 0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductInput'
+            examples:
+              lengkap:
+                summary: Payload lengkap
+                value:
+                  ProductName: Bearing SKF 6203-2RS
+                  Unit: pcs
+                  MinStock: 200
+              minimal:
+                summary: Hanya nama
+                value:
+                  ProductName: Baut Stainless M10
+              invalid_negative:
+                summary: Invalid — MinStock negatif
+                value:
+                  ProductName: Test
+                  MinStock: -5
+              invalid_empty:
+                summary: Invalid — nama kosong
+                value:
+                  ProductName: ""
+      responses:
+        '201':
+          description: Created — produk baru berhasil disimpan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+              example:
+                ProductID: 1011
+                ProductName: Bearing SKF 6203-2RS
+                MinStock: 200
+                Unit: pcs
+        '400':
+          description: Bad Request — validasi Zod gagal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+              example:
+                error: Validasi gagal
+                details:
+                  - field: ProductName
+                    message: Nama produk tidak boleh kosong
+
+  /api/production-logs:
+    post:
+      tags: [Production Logs]
+      summary: Catat hasil produksi harian
+      description: |
+        Mencatat log produksi ke `ProductionLogs` dan **otomatis** membuat
+        `InventoryMovements` dengan `MovementType = "IN"` dan quantity sama.
+
+        Menggunakan **Prisma `$transaction`** — jika salah satu gagal,
+        kedua operasi di-rollback (atomic).
+
+        Product ID 1002 = Baut Industri M8 (stok awal tinggi, cocok untuk test).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductionLogInput'
+            examples:
+              valid:
+                summary: Payload valid
+                value:
+                  product_id: 1002
+                  quantity: 500
+                  operator_name: Budi Santoso
+              rollback:
+                summary: Product tidak ada (rollback)
+                value:
+                  product_id: 99999
+                  quantity: 100
+                  operator_name: Test Rollback
+              invalid_zero:
+                summary: Invalid — quantity 0
+                value:
+                  product_id: 1002
+                  quantity: 0
+                  operator_name: Test
+      responses:
+        '201':
+          description: Created — log + inventory IN berhasil disimpan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductionLog'
+              example:
+                LogID: 1010
+                ProductID: 1002
+                Quantity: 500
+                ProductionDate: '2026-06-16T08:37:32.997Z'
+                OperatorName: Budi Santoso
+        '400':
+          description: Bad Request — validasi Zod gagal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+              example:
+                error: Validasi gagal
+                details:
+                  - field: quantity
+                    message: quantity harus lebih dari 0
+        '404':
+          description: Not Found — product_id tidak ada di database
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Produk dengan ID 99999 tidak ditemukan
+
+  /api/inventory/movements:
+    get:
+      tags: [Inventory Movements]
+      summary: Ambil history pergerakan inventaris
+      description: |
+        Sorted by `MovementDate` desc. Include data produk (ProductName, Unit).
+        Bisa filter `?type=IN` atau `?type=OUT`.
+      parameters:
+        - in: query
+          name: type
+          required: false
+          schema:
+            type: string
+            enum: [IN, OUT]
+          description: Filter berdasarkan tipe movement
+          example: IN
+      responses:
+        '200':
+          description: OK — array of movements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InventoryMovementWithProduct'
+              example:
+                - MovementID: 1010
+                  ProductID: 1002
+                  MovementType: OUT
+                  Quantity: 50
+                  MovementDate: '2026-06-16T08:37:55.900Z'
+                  Products:
+                    ProductName: Baut Industri M8
+                    Unit: pcs
+        '400':
+          description: Bad Request — type invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: 'Query parameter type harus "IN" atau "OUT"'
+    post:
+      tags: [Inventory Movements]
+      summary: Catat mutasi barang keluar (OUT)
+      description: |
+        **Business rule:** Stok saat ini harus >= quantity. Jika tidak, return 422.
+        IN movement hanya dibuat otomatis via `POST /api/production-logs` — tidak bisa manual.
+
+        Stok dihitung: `SUM(Quantity WHERE MovementType='IN') - SUM(Quantity WHERE MovementType='OUT')`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMovementOutInput'
+            examples:
+              valid:
+                summary: Payload valid (stok cukup)
+                value:
+                  product_id: 1002
+                  quantity: 50
+                  movement_type: OUT
+              invalid_stock:
+                summary: Stok tidak cukup
+                value:
+                  product_id: 1002
+                  quantity: 999999
+                  movement_type: OUT
+              invalid_in:
+                summary: IN ditolak (gunakan production-logs)
+                value:
+                  product_id: 1002
+                  quantity: 100
+                  movement_type: IN
+      responses:
+        '201':
+          description: Created — movement OUT berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryMovement'
+              example:
+                MovementID: 1011
+                ProductID: 1002
+                MovementType: OUT
+                Quantity: 50
+                MovementDate: '2026-06-16T08:40:00.000Z'
+        '400':
+          description: Bad Request — validasi Zod gagal atau movement_type=IN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                zod_error:
+                  summary: Validasi Zod
+                  value:
+                    error: Validasi gagal
+                    details:
+                      - field: quantity
+                        message: quantity harus lebih dari 0
+                in_rejected:
+                  summary: IN ditolak
+                  value:
+                    error: 'Hanya movement_type "OUT" yang didukung. Movement IN otomatis dari production log.'
+        '404':
+          description: Not Found — product_id tidak ada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Produk dengan ID 99999 tidak ditemukan
+        '422':
+          description: Unprocessable Entity — stok tidak cukup
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: 'Stok tidak mencukupi. Stok saat ini: 1050, diminta: 999999'
+
+  /api/dashboard/summary:
+    get:
+      tags: [Dashboard]
+      summary: Ringkasan agregat untuk dashboard
+      description: |
+        3 metrik utama:
+        - `total_products` — total variasi produk
+        - `total_production_today` — sum Quantity ProductionLogs hari ini (00:00 WIB ke atas)
+        - `low_stock_alerts` — array produk yang `CurrentStock < MinStock`
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardSummary'
+              example:
+                total_products: 9
+                total_production_today: 1477
+                low_stock_alerts:
+                  - ProductID: 1007
+                    ProductName: Bearing SKF 6203
+                    Unit: pcs
+                    MinStock: 200
+                    CurrentStock: 0
+                  - ProductID: 1008
+                    ProductName: Test Produk API
+                    Unit: pcs
+                    MinStock: 50
+                    CurrentStock: 0
+
+components:
+  schemas:
+    Product:
+      type: object
+      required: [ProductID, ProductName]
+      properties:
+        ProductID:
+          type: integer
+          format: int64
+          description: Auto-increment primary key (SQL Server IDENTITY, mulai dari 1002)
+          example: 1011
+        ProductName:
+          type: string
+          maxLength: 100
+          example: Baut Industri M8
+        MinStock:
+          type: integer
+          minimum: 0
+          nullable: true
+          default: 0
+          example: 500
+        Unit:
+          type: string
+          maxLength: 20
+          nullable: true
+          example: pcs
+
+    CreateProductInput:
+      type: object
+      required: [ProductName]
+      properties:
+        ProductName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Bearing SKF 6203-2RS
+        Unit:
+          type: string
+          maxLength: 20
+          nullable: true
+          example: pcs
+        MinStock:
+          type: integer
+          minimum: 0
+          nullable: true
+          example: 200
+
+    ProductionLog:
+      type: object
+      required: [LogID, ProductID, Quantity]
+      properties:
+        LogID:
+          type: integer
+          example: 1010
+        ProductID:
+          type: integer
+          example: 1002
+        Quantity:
+          type: integer
+          example: 500
+        ProductionDate:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-06-16T08:37:32.997Z'
+        OperatorName:
+          type: string
+          maxLength: 50
+          nullable: true
+          example: Budi Santoso
+
+    CreateProductionLogInput:
+      type: object
+      required: [product_id, quantity, operator_name]
+      properties:
+        product_id:
+          type: integer
+          positive: true
+          example: 1002
+          description: ID produk yang diproduksi (harus ada di tabel Products)
+        quantity:
+          type: integer
+          positive: true
+          example: 500
+        operator_name:
+          type: string
+          minLength: 1
+          maxLength: 50
+          example: Budi Santoso
+
+    InventoryMovement:
+      type: object
+      required: [MovementID, ProductID, Quantity]
+      properties:
+        MovementID:
+          type: integer
+          example: 1010
+        ProductID:
+          type: integer
+          example: 1002
+        MovementType:
+          type: string
+          enum: [IN, OUT]
+          maxLength: 10
+          nullable: true
+          example: OUT
+        Quantity:
+          type: integer
+          example: 50
+        MovementDate:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-06-16T08:40:00.000Z'
+
+    InventoryMovementWithProduct:
+      allOf:
+        - $ref: '#/components/schemas/InventoryMovement'
+        - type: object
+          properties:
+            Products:
+              type: object
+              properties:
+                ProductName:
+                  type: string
+                  example: Baut Industri M8
+                Unit:
+                  type: string
+                  nullable: true
+                  example: pcs
+
+    CreateMovementOutInput:
+      type: object
+      required: [product_id, quantity]
+      properties:
+        product_id:
+          type: integer
+          positive: true
+          example: 1002
+        quantity:
+          type: integer
+          positive: true
+          example: 50
+        movement_type:
+          type: string
+          enum: [OUT]
+          default: OUT
+          example: OUT
+          description: Hanya "OUT" yang didukung. IN otomatis dari production log.
+
+    DashboardSummary:
+      type: object
+      required: [total_products, total_production_today, low_stock_alerts]
+      properties:
+        total_products:
+          type: integer
+          minimum: 0
+          example: 9
+        total_production_today:
+          type: integer
+          minimum: 0
+          example: 1477
+        low_stock_alerts:
+          type: array
+          items:
+            type: object
+            properties:
+              ProductID:
+                type: integer
+                example: 1007
+              ProductName:
+                type: string
+                example: Bearing SKF 6203
+              Unit:
+                type: string
+                nullable: true
+                example: pcs
+              MinStock:
+                type: integer
+                example: 200
+              CurrentStock:
+                type: integer
+                example: 0
+
+    ValidationError:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Validasi gagal
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                example: ProductName
+              message:
+                type: string
+                example: Nama produk tidak boleh kosong
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Terjadi kesalahan
