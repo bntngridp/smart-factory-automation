@@ -2,107 +2,57 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
 
 jobs:
-  ci:
-    name: Lint, TypeCheck, Test
+  lint-typecheck-test:
     runs-on: ubuntu-latest
 
-    services:
-      mssql:
-        image: mcr.microsoft.com/mssql/server:2022-CU13-ubuntu-22.04
-        env:
-          ACCEPT_EULA: "Y"
-          MSSQL_SA_PASSWORD: "BintangRidwan8!"
-          MSSQL_PID: "Express"
-        ports:
-          - 1433:1433
-        options: >-
-          --health-cmd "bash -c 'cat < /dev/tcp/localhost/1433'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 15
-          --health-start-period 30s
-
-    defaults:
-      run:
-        working-directory: apps/web
-
     steps:
-      - name: Checkout repository
+      - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: apps/web/package-lock.json
+          node-size: '20' # Sesuaikan dengan versi Node kamu (20 atau 22)
+          cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Create .env
+      # Langkah Pintar: Jalankan SQL Server langsung lewat Docker CLI (Lebih Stabil)
+      - name: Start SQL Server Local Container
         run: |
-          echo 'DATABASE_URL="sqlserver://localhost:1433;database=InventoryDB;user=sa;password=BintangRidwan8!;encrypt=true;trustServerCertificate=true;"' > .env
+          docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=YourStrong@Password123" \
+          -p 1433:1433 \
+          --name sql_server \
+          -d mcr.microsoft.com/azure-sql-edge:latest
 
-      - name: Generate Prisma Client
-        run: npx prisma generate
+          # Tunggu sampai SQL Server benar-benar siap menerima koneksi
+          echo "Waiting for SQL Server to boot up..."
+          sleep 15
 
-      - name: TypeScript check
-        run: npx tsc --noEmit
+      - name: Install Dependencies
+        run: npm install
 
-      - name: Lint
+      - name: Run Linter
         run: npm run lint
+        working-directory: apps/web
 
-      - name: Wait for SQL Server port
+      - name: Run TypeCheck (TypeScript)
+        run: npx tsc --noEmit
+        working-directory: apps/web
+
+      - name: Setup Prisma Schema & Seeder
         run: |
-          echo "Waiting for SQL Server to accept connections..."
-          for i in $(seq 1 60); do
-            if bash -c 'cat < /dev/tcp/localhost/1433' > /dev/null 2>&1; then
-              echo "SQL Server port 1433 is open!"
-              exit 0
-            fi
-            echo "Attempt $i/60 — port not ready, waiting 3s..."
-            sleep 3
-          done
-          echo "SQL Server port 1433 never became ready"
-          exit 1
+          npx prisma db push
+          npx prisma db seed
+        working-directory: apps/web
+        env:
+          DATABASE_URL: "sqlserver://localhost:1433;database=InventoryDB;user=sa;password=YourStrong@Password123;encrypt=true;trustServerCertificate=true;"
 
-      - name: Wait for SQL Server to fully boot
-        run: |
-          echo "Waiting extra 20s for SQL Server to fully initialize..."
-          sleep 20
-
-      - name: Prisma DB Push
-        run: npx prisma db push
-
-      - name: Seed database
-        run: npx prisma db seed
-
-      - name: Start dev server
-        run: |
-          npm run dev > /tmp/next-dev.log 2>&1 &
-          echo "Waiting for dev server to start..."
-          for i in $(seq 1 40); do
-            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 || echo "000")
-            if [ "$code" = "200" ]; then
-              echo "Dev server is ready (200 OK)!"
-              exit 0
-            fi
-            echo "Attempt $i/40 — current code=$code — waiting 3s..."
-            sleep 3
-          done
-          echo "Dev server failed to start"
-          tail -80 /tmp/next-dev.log
-          exit 1
-
-      - name: Run integration tests
+      - name: Run Automated API Integration Test
         run: npm run test:api
-
-      - name: Stop dev server
-        if: always()
-        run: pkill -f "next dev" || true
+        working-directory: apps/web
+        env:
+          DATABASE_URL: "sqlserver://localhost:1433;database=InventoryDB;user=sa;password=YourStrong@Password123;encrypt=true;trustServerCertificate=true;"
