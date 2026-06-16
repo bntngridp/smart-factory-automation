@@ -17,14 +17,11 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Menggunakan Node.js 24 sesuai regulasi GitHub Actions Juni 2026
       - name: Setup Node.js (v24)
         uses: actions/setup-node@v4
         with:
           node-version: '24'
-          # Opsi cache dihapus agar GitHub tidak memaksa mencari lockfile di folder root
 
-      # Menyalakan Azure SQL Edge via Docker CLI
       - name: Start SQL Server Local Container
         run: |
           docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=YourStrong@Password123" \
@@ -33,15 +30,12 @@ jobs:
           -d mcr.microsoft.com/azure-sql-edge:latest
 
           echo "Waiting for SQL Server to boot up..."
-          sleep 15
+          sleep 20
 
-      # Memaksa install dependency di folder web tempat Next.js & package.json berada
       - name: Install Dependencies
         run: npm install
         working-directory: apps/web
 
-      # PENTING: Generate Prisma Client agar type definitions tersedia untuk TypeScript
-      # Tanpa step ini, @prisma/client tidak punya type 'PrismaClient' di CI
       - name: Generate Prisma Client
         run: npx prisma generate
         working-directory: apps/web
@@ -56,8 +50,28 @@ jobs:
 
       - name: Setup Prisma Schema & Seeder
         run: |
-          npx prisma db push
+          npx prisma db push --skip-generate
           npx prisma db seed
+        working-directory: apps/web
+        env:
+          DATABASE_URL: "sqlserver://localhost:1433;database=InventoryDB;user=sa;password=YourStrong@Password123;encrypt=true;trustServerCertificate=true;"
+
+      - name: Start Next.js dev server
+        run: |
+          npm run dev > /tmp/next-dev.log 2>&1 &
+          echo "Waiting for dev server to be ready..."
+          for i in $(seq 1 40); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 || echo "000")
+            if [ "$code" = "200" ]; then
+              echo "Dev server is ready!"
+              exit 0
+            fi
+            echo "Attempt $i/40 — current code=$code — waiting 3s..."
+            sleep 3
+          done
+          echo "Dev server failed to start"
+          tail -80 /tmp/next-dev.log
+          exit 1
         working-directory: apps/web
         env:
           DATABASE_URL: "sqlserver://localhost:1433;database=InventoryDB;user=sa;password=YourStrong@Password123;encrypt=true;trustServerCertificate=true;"
@@ -67,3 +81,7 @@ jobs:
         working-directory: apps/web
         env:
           DATABASE_URL: "sqlserver://localhost:1433;database=InventoryDB;user=sa;password=YourStrong@Password123;encrypt=true;trustServerCertificate=true;"
+
+      - name: Stop dev server
+        if: always()
+        run: pkill -f "next dev" || true
