@@ -13,10 +13,11 @@ jobs:
 
     services:
       mssql:
-        image: mcr.microsoft.com/azure-sql-edge
+        image: mcr.microsoft.com/mssql/server:2022-CU13-ubuntu-22.04
         env:
           ACCEPT_EULA: "Y"
-          MSSQL_SA_PASSWORD: "Bintangridwan8"
+          MSSQL_SA_PASSWORD: "BintangRidwan8!"
+          MSSQL_PID: "Express"
         ports:
           - 1433:1433
         options: >-
@@ -24,7 +25,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 15
-          --health-start-period 20s
+          --health-start-period 30s
 
     defaults:
       run:
@@ -46,7 +47,7 @@ jobs:
 
       - name: Create .env
         run: |
-          echo 'DATABASE_URL="sqlserver://localhost:1433;database=InventoryDB;user=sa;password=Bintangridwan8;encrypt=true;trustServerCertificate=true;"' > .env
+          echo 'DATABASE_URL="sqlserver://localhost:1433;database=InventoryDB;user=sa;password=BintangRidwan8!;encrypt=true;trustServerCertificate=true;"' > .env
 
       - name: Generate Prisma Client
         run: npx prisma generate
@@ -57,42 +58,24 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Wait for SQL Server port 1433
+      - name: Wait for SQL Server port
         run: |
           echo "Waiting for SQL Server to accept connections..."
           for i in $(seq 1 60); do
             if bash -c 'cat < /dev/tcp/localhost/1433' > /dev/null 2>&1; then
-              echo "SQL Server is accepting connections!"
+              echo "SQL Server port 1433 is open!"
               exit 0
             fi
             echo "Attempt $i/60 — port not ready, waiting 3s..."
             sleep 3
           done
-          echo "SQL Server never became ready"
+          echo "SQL Server port 1433 never became ready"
           exit 1
 
       - name: Wait for SQL Server to fully boot
         run: |
-          echo "SQL Server may still be initializing even though port is open..."
+          echo "Waiting extra 20s for SQL Server to fully initialize..."
           sleep 20
-
-      - name: Create database via Prisma
-        run: |
-          node -e "
-          const { PrismaClient } = require('@prisma/client');
-          const { PrismaMssql } = require('@prisma/adapter-mssql');
-          const adapter = new PrismaMssql('sqlserver://localhost:1433;user=sa;password=Bintangridwan8;encrypt=true;trustServerCertificate=true;');
-          const prisma = new PrismaClient({ adapter });
-          try {
-            await prisma.\$queryRawUnsafe(\"IF NOT EXISTS (SELECT * FROM sys.databases WHERE name='InventoryDB') CREATE DATABASE InventoryDB\");
-            console.log('Database ready');
-          } catch (e) {
-            console.error('DB create error:', e.message);
-            throw e;
-          } finally {
-            await prisma.\$disconnect();
-          }
-          "
 
       - name: Prisma DB Push
         run: npx prisma db push
