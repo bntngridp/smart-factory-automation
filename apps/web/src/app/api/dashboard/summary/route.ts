@@ -22,15 +22,17 @@ export async function GET() {
       }),
     ])
 
+    type Movement = { MovementType: string | null; Quantity: number }
+
     const lowStockAlerts = products
       .map((product) => {
-        const totalIn = product.InventoryMovements
+        const movements = product.InventoryMovements as Movement[]
+        const totalIn = movements
           .filter((m) => m.MovementType === 'IN')
-          .reduce((sum, m) => sum + m.Quantity, 0)
-
-        const totalOut = product.InventoryMovements
+          .reduce((sum: number, m) => sum + m.Quantity, 0)
+        const totalOut = movements
           .filter((m) => m.MovementType === 'OUT')
-          .reduce((sum, m) => sum + m.Quantity, 0)
+          .reduce((sum: number, m) => sum + m.Quantity, 0)
 
         const currentStock = totalIn - totalOut
         const minStock = product.MinStock ?? 0

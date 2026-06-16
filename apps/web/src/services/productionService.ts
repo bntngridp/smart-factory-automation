@@ -1,7 +1,6 @@
 import 'server-only'
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/db'
-import type { ProductionLogs } from '@prisma/client'
 
 export type CreateProductionLogInput = {
   ProductID: number
@@ -9,9 +8,7 @@ export type CreateProductionLogInput = {
   OperatorName: string
 }
 
-export async function getProductionLogs(limit = 20): Promise<
-  (ProductionLogs & { Products: { ProductName: string; Unit: string | null } })[]
-> {
+export async function getProductionLogs(limit = 20) {
   return prisma.productionLogs.findMany({
     take: limit,
     orderBy: { ProductionDate: 'desc' },
@@ -26,9 +23,7 @@ export async function getProductionLogs(limit = 20): Promise<
   })
 }
 
-export async function createProductionLog(
-  data: CreateProductionLogInput,
-): Promise<ProductionLogs> {
+export async function createProductionLog(data: CreateProductionLogInput) {
   if (!data.ProductID || data.ProductID <= 0) {
     throw new Error('Produk harus dipilih')
   }

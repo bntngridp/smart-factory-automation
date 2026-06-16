@@ -2,10 +2,15 @@
 
 import { useState, useTransition } from 'react'
 import { createProductionLogAction } from '@/app/actions/production'
-import type { Products } from '@prisma/client'
+
+type Product = {
+  ProductID: number
+  ProductName: string
+  Unit: string | null
+}
 
 type Props = {
-  products: Pick<Products, 'ProductID' | 'ProductName' | 'Unit'>[]
+  products: Pick<Product, 'ProductID' | 'ProductName' | 'Unit'>[]
 }
 
 export function ProductionForm({ products }: Props) {

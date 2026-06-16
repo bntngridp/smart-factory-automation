@@ -1,7 +1,6 @@
 import 'server-only'
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/db'
-import type { InventoryMovements } from '@prisma/client'
 
 export type CreateMovementOutInput = {
   ProductID: number
@@ -14,20 +13,19 @@ export async function getCurrentStock(productId: number): Promise<number> {
     select: { MovementType: true, Quantity: true },
   })
 
-  const totalIn = movements
-    .filter((m) => m.MovementType === 'IN')
-    .reduce((sum, m) => sum + m.Quantity, 0)
+  type Movement = { MovementType: string | null; Quantity: number }
 
-  const totalOut = movements
+  const totalIn = (movements as Movement[])
+    .filter((m) => m.MovementType === 'IN')
+    .reduce((sum: number, m) => sum + m.Quantity, 0)
+  const totalOut = (movements as Movement[])
     .filter((m) => m.MovementType === 'OUT')
-    .reduce((sum, m) => sum + m.Quantity, 0)
+    .reduce((sum: number, m) => sum + m.Quantity, 0)
 
   return totalIn - totalOut
 }
 
-export async function createMovementOut(
-  data: CreateMovementOutInput,
-): Promise<InventoryMovements> {
+export async function createMovementOut(data: CreateMovementOutInput) {
   const product = await prisma.products.findUnique({
     where: { ProductID: data.ProductID },
   })
